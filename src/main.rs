@@ -318,14 +318,14 @@ async fn main() -> Result<()> {
     let s3_file_system = Arc::new(
         S3FileSystem::new(
             Some(SharedCredentialsProvider::new(Credentials::new(
-                ACCESS_KEY_ID,
-                SECRET_ACCESS_KEY,
+                ACCESS_KEY_ID.as_str(),
+                SECRET_ACCESS_KEY.as_str(),
                 None,
                 None,
-                PROVIDER_NAME,
+                PROVIDER_NAME.as_str(),
             ))),
             None,
-            Some(Endpoint::immutable(Uri::from_static(MINIO_ENDPOINT))),
+            Some(Endpoint::immutable(Uri::from_static(MINIO_ENDPOINT.as_str()))),
             None,
             None,
             None,
@@ -358,7 +358,7 @@ async fn main() -> Result<()> {
 
     ctx.register_table("tbl", Arc::new(table)).unwrap();
 
-    let batches = ctx.sql(SQL_QUERY).await?;
+    let batches = ctx.sql(SQL_QUERY.as_str()).await?;
     batches.show().await?;
 
     Ok(())
