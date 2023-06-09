@@ -313,31 +313,55 @@ impl ObjectReader for AmazonS3FileReader {
     }
 }
 
-// Test that a SQL query can be executed on a Parquet file that was read from `S3FileSystem`
 #[tokio::main]
-async fn main() -> datafusion::error::Result<()> {
+async fn main() -> Result<()> {
+    let s3_file_system = Arc::new(
+        S3FileSystem::new(
+            Some(SharedCredentialsProvider::new(Credentials::new(
+                ACCESS_KEY_ID,
+                SECRET_ACCESS_KEY,
+                None,
+                None,
+                PROVIDER_NAME,
+            ))),
+            None,
+            Some(Endpoint::immutable(Uri::from_static(MINIO_ENDPOINT))),
+            None,
+            None,
+            None,
+        )
+        .await,
+    );
+
+    let filename = "testbucket/data.parquet";
+
+    let listing_options = ListingOptions {
+        format: Arc::new(ParquetFormat::default()),
+        collect_stat: true,
+        file_extension: "parquet".to_owned(),
+        target_partitions: num_cpus::get(),
+        table_partition_cols: vec![],   
+    };
+
+    let resolved_schema = listing_options
+        .infer_schema(s3_file_system.clone(), filename)
+        .await?;
+
+    let table = ListingTable::new(
+        s3_file_system,
+        filename.to_owned(),
+        resolved_schema,
+        listing_options,
+    );
+
     let mut ctx = ExecutionContext::new();
-    let datasource =
-        MinioObjectStore::new(MINIO_ENDPOINT.as_str(), ACCESS_KEY_ID.as_str(), SECRET_ACCESS_KEY.as_str());
 
-    let provider = MinioTableProvider::try_new(
-        datasource,
-        Credentials::new(
-            ACCESS_KEY_ID.as_str(),
-            SECRET_ACCESS_KEY.as_str(),
-            None,
-            None,
-            PROVIDER_NAME.as_str(),
-        ),
-    )?;
+    ctx.register_table("tbl", Arc::new(table)).unwrap();
 
-    ctx.register_table("tbl", Arc::new(provider))?;
-
-    let batches = ctx.sql(SQL_QUERY.as_str()).await?;
-    pretty::print_batches(&batches)?;
+    let batches = ctx.sql(SQL_QUERY).await?;
+    batches.show().await?;
 
     Ok(())
-}
 
 #[cfg(test)]
 mod tests {
