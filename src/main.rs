@@ -42,6 +42,21 @@ use datafusion::datasource::listing::*;
 use datafusion::prelude::ExecutionContext;
 use datafusion::datasource::file_format::parquet::ParquetFormat;
 use bytes::Buf;
+use lazy_static::lazy_static;
+use std::env;
+
+lazy_static! {
+    pub static ref ACCESS_KEY_ID: String =
+        env::var("ACCESS_KEY_ID").unwrap_or_else(|_| String::from("minioadmin"));
+    pub static ref SECRET_ACCESS_KEY: String =
+        env::var("SECRET_ACCESS_KEY").unwrap_or_else(|_| String::from("minioadmin"));
+    pub static ref PROVIDER_NAME: String =
+        env::var("PROVIDER_NAME").unwrap_or_else(|_| String::from("Static"));
+    pub static ref MINIO_ENDPOINT: String =
+        env::var("MINIO_ENDPOINT").unwrap_or_else(|_| String::from("http://localhost:9000"));
+    pub static ref SQL_QUERY: String =
+        env::var("SQL_QUERY").unwrap_or_else(|_| String::from("SELECT * FROM tbl"));
+}
 
 pub mod error;
 use crate::error::S3Error;
@@ -298,59 +313,61 @@ impl ObjectReader for AmazonS3FileReader {
     }
 }
 
-const ACCESS_KEY_ID: &str = "minioadmin";
-const SECRET_ACCESS_KEY: &str = "minioadmin";
-const PROVIDER_NAME: &str = "Static";
-const MINIO_ENDPOINT: &str = "http://localhost:9000";
+const ACCESS_KEY_ID: &str = &*std::env::var("ACCESS_KEY_ID").unwrap_or_else(|_| String::from("minioadmin"));
+const SECRET_ACCESS_KEY: &str = &*std::env::var("SECRET_ACCESS_KEY").unwrap_or_else(|_| String::from("minioadmin"));
+const PROVIDER_NAME: &str = &*std::env::var("PROVIDER_NAME").unwrap_or_else(|_| String::from("Static"));
+const MINIO_ENDPOINT: &str = &*std::env::var("MINIO_ENDPOINT").unwrap_or_else(|_| String::from("http://localhost:9000"));
+
 
 // Test that a SQL query can be executed on a Parquet file that was read from `S3FileSystem`
 #[tokio::main]
-async fn main() -> Result<()> {
-    let s3_file_system = Arc::new(
-        S3FileSystem::new(
-            Some(SharedCredentialsProvider::new(Credentials::new(
-                ACCESS_KEY_ID,
-                SECRET_ACCESS_KEY,
-                None,
-                None,
-                PROVIDER_NAME,
-            ))),
-            None,
-            Some(Endpoint::immutable(Uri::from_static(MINIO_ENDPOINT))),
-            None,
-            None,
-            None,
-        )
-        .await,
-    );
-
-    let filename = "testbucket/data.parquet";
-
-    let listing_options = ListingOptions {
-        format: Arc::new(ParquetFormat::default()),
-        collect_stat: true,
-        file_extension: "parquet".to_owned(),
-        target_partitions: num_cpus::get(),
-        table_partition_cols: vec![],   
-    };
-
-    let resolved_schema = listing_options
-        .infer_schema(s3_file_system.clone(), filename)
-        .await?;
-
-    let table = ListingTable::new(
-        s3_file_system,
-        filename.to_owned(),
-        resolved_schema,
-        listing_options,
-    );
-
+async fn main() -> datafusion::error::Result<()> {
     let mut ctx = ExecutionContext::new();
+    let datasource =
+        MinioObjectStore::new(MINIO_ENDPOINT.as_str(), ACCESS_KEY_ID.as_str(), SECRET_ACCESS_KEY.as_str());
 
-    ctx.register_table("tbl", Arc::new(table)).unwrap();
+    let provider = MinioTableProvider::try_new(
+        datasource,
+        Credentials::new(
+            ACCESS_KEY_ID.as_str(),
+            SECRET_ACCESS_KEY.as_str(),
+            None,
+            None,
+            PROVIDER_NAME.as_str(),
+        ),
+    )?;
 
-    let batches = ctx.sql("SELECT * FROM tbl").await?;
-    batches.show().await?;
+    ctx.register_table("tbl", Arc::new(provider))?;
+
+    let batches = ctx.sql(SQL_QUERY.as_str()).await?;
+    pretty::print_batches(&batches)?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::env;
+
+    #[test]
+    fn test_env_vars() {
+        env::set_var("ACCESS_KEY_ID", "test_access_key_id");
+        env::set_var("SECRET_ACCESS_KEY", "test_secret_access_key");
+        env::set_var("PROVIDER_NAME", "test_provider_name");
+        env::set_var("MINIO_ENDPOINT", "test_minio_endpoint");
+        env::set_var("SQL_QUERY", "test_sql_query");
+
+        assert_eq!(ACCESS_KEY_ID.as_str(), "test_access_key_id");
+        assert_eq!(SECRET_ACCESS_KEY.as_str(), "test_secret_access_key");
+        assert_eq!(PROVIDER_NAME.as_str(), "test_provider_name");
+        assert_eq!(MINIO_ENDPOINT.as_str(), "test_minio_endpoint");
+        assert_eq!(SQL_QUERY.as_str(), "test_sql_query");
+
+        env::remove_var("ACCESS_KEY_ID");
+        env::remove_var("SECRET_ACCESS_KEY");
+        env::remove_var("PROVIDER_NAME");
+        env::remove_var("MINIO_ENDPOINT");
+        env::remove_var("SQL_QUERY");
+    }
 }
