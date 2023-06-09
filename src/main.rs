@@ -362,6 +362,7 @@ async fn main() -> Result<()> {
     batches.show().await?;
 
     Ok(())
+}
 
 #[cfg(test)]
 mod tests {
