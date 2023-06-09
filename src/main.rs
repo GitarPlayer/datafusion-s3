@@ -313,12 +313,6 @@ impl ObjectReader for AmazonS3FileReader {
     }
 }
 
-const ACCESS_KEY_ID: &str = &*std::env::var("ACCESS_KEY_ID").unwrap_or_else(|_| String::from("minioadmin"));
-const SECRET_ACCESS_KEY: &str = &*std::env::var("SECRET_ACCESS_KEY").unwrap_or_else(|_| String::from("minioadmin"));
-const PROVIDER_NAME: &str = &*std::env::var("PROVIDER_NAME").unwrap_or_else(|_| String::from("Static"));
-const MINIO_ENDPOINT: &str = &*std::env::var("MINIO_ENDPOINT").unwrap_or_else(|_| String::from("http://localhost:9000"));
-
-
 // Test that a SQL query can be executed on a Parquet file that was read from `S3FileSystem`
 #[tokio::main]
 async fn main() -> datafusion::error::Result<()> {
