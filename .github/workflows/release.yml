@@ -1,0 +1,64 @@
+name: Build and release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  actions: write
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: 
+      image: almalinux:8.7
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Install dependencies
+        run: |
+          yum install -y openssl-devel
+          yum groupinstall -y "Development Tools"
+
+      - name: Install Rust
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          source $HOME/.cargo/env
+          rustup default stable
+          rustup target add x86_64-unknown-linux-gnu
+
+      - name: Build
+        run: |
+          source $HOME/.cargo/env
+          cargo build --release --target x86_64-unknown-linux-gnu
+
+      - name: Get version
+        id: get_version
+        run: |
+          echo ::set-output name=version::$(grep "^version" ./Cargo.toml | head -1 | awk -F= '{print $2}' | sed 's/[[:space:]]//g' | sed 's/\"//g')
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
+        with:
+          tag_name: ${{ steps.get_version.outputs.version }}
+          release_name: Release ${{ steps.get_version.outputs.version }}
+          draft: false
+          prerelease: false
+
+      - name: Upload Release Asset
+        id: upload-release-asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }} 
+          asset_path: ./target/x86_64-unknown-linux-gnu/release/rust-clean-json
+          asset_name: rust-clean-json-${{ steps.get_version.outputs.version }}-x86_64-unknown-linux-gnu
+          asset_content_type: application/octet-stream
