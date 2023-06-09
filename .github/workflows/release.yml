@@ -59,6 +59,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} 
-          asset_path: ./target/x86_64-unknown-linux-gnu/release/rust-clean-json
-          asset_name: rust-clean-json-${{ steps.get_version.outputs.version }}-x86_64-unknown-linux-gnu
+          asset_path: ./target/x86_64-unknown-linux-gnu/release/datafusion-s3
+          asset_name: datafusion-s3-${{ steps.get_version.outputs.version }}-x86_64-unknown-linux-gnu
           asset_content_type: application/octet-stream
