@@ -56,6 +56,8 @@ lazy_static! {
         env::var("MINIO_ENDPOINT").unwrap_or_else(|_| String::from("http://localhost:9000"));
     pub static ref SQL_QUERY: String =
         env::var("SQL_QUERY").unwrap_or_else(|_| String::from("SELECT * FROM tbl"));
+    pub static ref FILE_NAME: String =
+        env::var("FILE_NAME").unwrap_or_else(|_| String::from("testbucket/data.parquet"));
 }
 
 pub mod error;
@@ -333,7 +335,7 @@ async fn main() -> Result<()> {
         .await,
     );
 
-    let filename = "testbucket/data.parquet";
+    let filename = FILE_NAME.as_str();
 
     let listing_options = ListingOptions {
         format: Arc::new(ParquetFormat::default()),
